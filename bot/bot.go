@@ -178,7 +178,7 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 			for _, entry := range entries {
 				if err := player.Play(context.Background(), voiceChannelID, entry.URL); err != nil {
 					fmt.Fprintln(os.Stderr, err)
-					break
+					continue
 				}
 
 				hasUser, err := b.hasUserExceptForMe(guildID, voiceChannelID)
