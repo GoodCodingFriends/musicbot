@@ -56,25 +56,25 @@ func (b *Bot) OnReady(event *ReadyEvent) error {
 }
 
 func (b *Bot) OnGuildCreate(event *GuildCreateEvent) error {
-	if event.Guild.Unavailable {
-		return nil
-	}
-
-	var channel *Channel
-	for _, c := range event.Guild.Channels {
-		if c.IsGuildText && b.Session.HasSendMessagePermission(b.me.ID, c.ID) {
-			channel = c
-			break
-		}
-	}
-	if channel == nil {
-		return nil
-	}
-
-	_, err := b.Session.ChannelMessageSend(channel.ID, "Commands: !add <url> [to <playlist>] | !play [<playlist>] | !add-playlist <playlist>")
-	if err != nil {
-		return err
-	}
+	// if event.Guild.Unavailable {
+	// 	return nil
+	// }
+  //
+	// var channel *Channel
+	// for _, c := range event.Guild.Channels {
+	// 	if c.IsGuildText && b.Session.HasSendMessagePermission(b.me.ID, c.ID) {
+	// 		channel = c
+	// 		break
+	// 	}
+	// }
+	// if channel == nil {
+	// 	return nil
+	// }
+  //
+	// _, err := b.Session.ChannelMessageSend(channel.ID, "Commands: !add <url> [to <playlist>] | !play [<playlist>] | !add-playlist <playlist>")
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
