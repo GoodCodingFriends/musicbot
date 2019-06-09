@@ -12,6 +12,7 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/acomagu/musicbot/musicplayer"
 	"github.com/acomagu/musicbot/soundplayer"
+	"github.com/acomagu/musicbot/version"
 	"github.com/pkg/errors"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc"
@@ -59,7 +60,7 @@ func (b *Bot) OnGuildCreate(event *GuildCreateEvent) error {
 	// if event.Guild.Unavailable {
 	// 	return nil
 	// }
-  //
+	//
 	// var channel *Channel
 	// for _, c := range event.Guild.Channels {
 	// 	if c.IsGuildText && b.Session.HasSendMessagePermission(b.me.ID, c.ID) {
@@ -70,7 +71,7 @@ func (b *Bot) OnGuildCreate(event *GuildCreateEvent) error {
 	// if channel == nil {
 	// 	return nil
 	// }
-  //
+	//
 	// _, err := b.Session.ChannelMessageSend(channel.ID, "Commands: !add <url> [to <playlist>] | !play [<playlist>] | !add-playlist <playlist>")
 	// if err != nil {
 	// 	return err
@@ -176,6 +177,11 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 		// Start playing music
 		go func() {
 			for _, entry := range entries {
+				if _, err := b.Session.ChannelMessageSend(channelID, fmt.Sprintf(":musical_note: Now Playing :musical_note:\n%s", entry.URL)); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					break
+				}
+
 				if err := player.Play(context.Background(), voiceChannelID, entry.URL); err != nil {
 					fmt.Fprintln(os.Stderr, err)
 					continue
@@ -291,6 +297,11 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 		}
 
 		// Feedback
+
+	case strings.HasPrefix(e.Content, "!version"):
+		if _, err := b.Session.ChannelMessageSend(channelID, version.Version); err != nil {
+			return err
+		}
 	}
 
 	return nil
