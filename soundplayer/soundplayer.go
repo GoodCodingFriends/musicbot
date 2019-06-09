@@ -28,7 +28,7 @@ func NewSoundPlayer(joiner VoiceChannelJoiner, guildID string) *SoundPlayer {
 		sp: &soundPlayer{
 			GuildID:      guildID,
 			Joiner:       joiner,
-			idletime:     10 * time.Minute,
+			idletime:     10 * time.Second,
 			speakbuftime: 250 * time.Millisecond,
 		},
 		guildID: guildID,
