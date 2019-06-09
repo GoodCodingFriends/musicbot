@@ -78,13 +78,11 @@ func (sp *soundPlayer) Start() chan<- playSoundArgs {
 	go func(soundChan <-chan playSoundArgs) {
 	RETRY:
 		for args := range soundChan {
-			fmt.Println("ABC")
 			vc, err := sp.Joiner.JoinVoiceChannel(sp.GuildID, args.ChannelID)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				continue
 			}
-			fmt.Println("D")
 
 			currentChannelID := args.ChannelID
 
@@ -136,14 +134,11 @@ func (sp *soundPlayer) changeChannel(vc VC, channelID string) (VC, error) {
 func (sp *soundPlayer) playSound(ctx context.Context, vc VC, frames <-chan []byte) error {
 	time.Sleep(sp.speakbuftime)
 
-	fmt.Println("F")
-
 	vc.Speaking(true)
 	defer func() {
 		time.Sleep(sp.speakbuftime)
 		vc.Speaking(false)
 	}()
 
-	fmt.Println("PLAYING")
 	return vc.Write(ctx, frames)
 }

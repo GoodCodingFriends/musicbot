@@ -192,7 +192,6 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 					fmt.Fprintln(os.Stderr, err)
 					break
 				}
-				fmt.Println("hasuser:", hasUser)
 				if !hasUser {
 					break
 				}
