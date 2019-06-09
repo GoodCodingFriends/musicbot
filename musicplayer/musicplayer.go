@@ -64,7 +64,7 @@ func loadSound(file io.Reader) (<-chan []byte, <-chan error) {
 		CompressionLevel: 10,
 		PacketLoss:       1,
 		BufferedFrames:   524288,
-		VBR:              false,
+		VBR:              true,
 	}
 	encoder, err := dca.EncodeMem(file, option)
 	if err != nil {
