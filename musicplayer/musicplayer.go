@@ -17,7 +17,7 @@ type MusicPlayer struct {
 }
 
 func (mp *MusicPlayer) Play(ctx context.Context, channelID, url string) error {
-	cmd := exec.CommandContext(ctx, "youtube-dl", "-f", "bestaudio", "-o", "-", url)
+	cmd := exec.CommandContext(ctx, "youtube-dl", "--no-playlist", "-f", "bestaudio", "-o", "-", url)
 	soundfile, soundfilew := nio.Pipe(buffer.New(10 * 1024 * 1024)) // 10MB
 	cmd.Stdout = soundfilew
 	cmd.Stderr = os.Stderr
