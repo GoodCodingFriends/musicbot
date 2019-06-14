@@ -19,4 +19,4 @@ require (
 	google.golang.org/grpc v1.19.0
 )
 
-replace github.com/bwmarrin/discordgo v0.19.0 => github.com/acomagu/discordgo v0.19.1-0.20190614141415-9d0cdedfa4da
+replace github.com/bwmarrin/discordgo v0.19.0 => github.com/acomagu/discordgo v0.19.1-0.20190614154659-66964c024141

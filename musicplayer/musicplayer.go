@@ -90,7 +90,7 @@ func loadSound(file io.Reader) ([][]byte, error) {
 		Volume:           256,
 		Channels:         2,
 		FrameRate:        48000,
-		FrameDuration:    60,
+		FrameDuration:    40,
 		Bitrate:          128,
 		Application:      dca.AudioApplicationAudio,
 		CompressionLevel: 10,
