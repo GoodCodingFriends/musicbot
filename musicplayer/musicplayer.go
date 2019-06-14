@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 
 	"github.com/acomagu/musicbot/soundplayer"
@@ -32,18 +31,10 @@ func NewMusicPlayer(sp *soundplayer.SoundPlayer, url string) *MusicPlayer {
 	}
 }
 
-var format = strings.Join([]string{
-	"bestaudio[asr<=50000][abr<=200][filesize<15M]",
-	"bestaudio[filesize<15M]",
-	"worst[asr>=40000][abr>=120][filesize<15M]",
-	"worst[abr>=90][filesize<15M]",
-	"best[filesize<15M]",
-}, "/")
-
 func (mp *MusicPlayer) Download(ctx context.Context) error {
 	var er error
 	mp.download.Do(func() {
-		cmd := exec.CommandContext(ctx, "youtube-dl", "--no-playlist", "-f", format, "-o", "-", mp.url)
+		cmd := exec.CommandContext(ctx, "youtube-dl", "--no-playlist", "--max-filesize=15M", "-f", "bestaudio[asr<=50000][abr<=200]/bestaudio/worst[asr>=40000][abr>=120]/worst[abr>=90]/best", "-o", "-", mp.url)
 
 		cmd.Stdout = mp.w
 		cmd.Stderr = os.Stderr
