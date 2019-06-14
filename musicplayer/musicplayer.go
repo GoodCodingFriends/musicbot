@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
+	"sync"
 
 	"github.com/acomagu/musicbot/soundplayer"
 	"github.com/djherbis/buffer"
@@ -13,84 +15,106 @@ import (
 )
 
 type MusicPlayer struct {
-	SoundPlayer *soundplayer.SoundPlayer
+	sp       *soundplayer.SoundPlayer
+	url      string
+	w        *nio.PipeWriter
+	r        io.Reader
+	download sync.Once
 }
 
-func (mp *MusicPlayer) Play(ctx context.Context, channelID, url string) error {
-	cmd := exec.CommandContext(ctx, "youtube-dl", "--no-playlist", "-f", "bestaudio", "-o", "-", url)
-	soundfile, soundfilew := nio.Pipe(buffer.New(10 * 1024 * 1024)) // 10MB
-	cmd.Stdout = soundfilew
-	cmd.Stderr = os.Stderr
+func NewMusicPlayer(sp *soundplayer.SoundPlayer, url string) *MusicPlayer {
+	r, w := nio.Pipe(buffer.New(15 * 1024 * 1024)) // 15MB
+	return &MusicPlayer{
+		sp:  sp,
+		url: url,
+		w:   w,
+		r:   r,
+	}
+}
 
-	errC2 := make(chan error, 1)
+var format = strings.Join([]string{
+	"bestaudio[asr<=50000][abr<=200][filesize<15M]",
+	"bestaudio[filesize<15M]",
+	"worst[asr>=40000][abr>=120][filesize<15M]",
+	"worst[abr>=90][filesize<15M]",
+	"best[filesize<15M]",
+}, "/")
 
-	if err := cmd.Start(); err != nil {
+func (mp *MusicPlayer) Download(ctx context.Context) error {
+	var er error
+	mp.download.Do(func() {
+		cmd := exec.CommandContext(ctx, "youtube-dl", "--no-playlist", "-f", format, "-o", "-", mp.url)
+
+		cmd.Stdout = mp.w
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Start(); err != nil {
+			er = err
+		}
+
+		er = cmd.Wait()
+		mp.w.CloseWithError(io.EOF)
+	})
+
+	return er
+}
+
+func (mp *MusicPlayer) Play(ctx context.Context, channelID string) error {
+	if err := mp.Download(ctx); err != nil { // Ensure
 		return err
 	}
 
+	frames, err := loadSound(mp.r)
+	if err != nil {
+		return err
+	}
+
+	// No concurrent for low performance env.
+	frameC := make(chan []byte)
 	go func() {
-		errC2 <- cmd.Wait()
-		soundfilew.CloseWithError(io.EOF)
+		for _, frame := range frames {
+			frameC <- frame
+		}
+		close(frameC)
 	}()
 
-	frames, errC := loadSound(soundfile)
-	if err := mp.SoundPlayer.PlaySound(ctx, channelID, frames); err != nil {
-		return err
-	}
-
-	// Wait for the command.
-	if err := <-errC2; err != nil {
-		return err
-	}
-
-	// Wait for the playing.
-	if err := <-errC; err != nil {
+	if err := mp.sp.PlaySound(ctx, channelID, frameC); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func loadSound(file io.Reader) (<-chan []byte, <-chan error) {
-	errC := make(chan error, 1)
-
+func loadSound(file io.Reader) ([][]byte, error) {
 	option := &dca.EncodeOptions{
 		Volume:           256,
 		Channels:         2,
 		FrameRate:        48000,
-		FrameDuration:    20,
+		FrameDuration:    60,
 		Bitrate:          128,
 		Application:      dca.AudioApplicationAudio,
 		CompressionLevel: 10,
 		PacketLoss:       1,
-		BufferedFrames:   524288,
+		BufferedFrames:   1024,
 		VBR:              true,
 	}
 	encoder, err := dca.EncodeMem(file, option)
 	if err != nil {
-		errC <- err
-		return nil, errC
+		return nil, err
 	}
 
-	c := make(chan []byte, 1024)
-	go func() {
-		defer func() {
-			close(c)
-		}()
-		for {
-			frame, err := encoder.OpusFrame()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				errC <- err
-				return
-			}
-
-			c <- frame
+	var frames [][]byte
+	for {
+		frame, err := encoder.OpusFrame()
+		if err == io.EOF {
+			break
 		}
-		errC <- nil
-	}()
+		if err != nil {
+			return nil, err
+		}
 
-	return c, errC
+		frames = append(frames, frame)
+	}
+
+	return frames, nil
 }

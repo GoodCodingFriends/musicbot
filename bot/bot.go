@@ -27,7 +27,7 @@ func init() {
 
 type Bot struct {
 	Session      Session
-	MusicPlayers map[string]*musicplayer.MusicPlayer
+	SoundPlayers map[string]*soundplayer.SoundPlayer
 	Joiner       soundplayer.VoiceChannelJoiner
 	me           *User
 }
@@ -40,7 +40,7 @@ func New(session Session, joiner soundplayer.VoiceChannelJoiner) (*Bot, error) {
 
 	return &Bot{
 		Session:      session,
-		MusicPlayers: make(map[string]*musicplayer.MusicPlayer), // guildID -> SoundPlayer
+		SoundPlayers: make(map[string]*soundplayer.SoundPlayer), // guildID -> SoundPlayer
 		Joiner:       joiner,
 		me:           me,
 	}, nil
@@ -125,12 +125,10 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 			return err
 		}
 
-		if _, ok := b.MusicPlayers[guildID]; !ok {
-			b.MusicPlayers[guildID] = &musicplayer.MusicPlayer{
-				SoundPlayer: soundplayer.NewSoundPlayer(b.Joiner, guildID),
-			}
+		if _, ok := b.SoundPlayers[guildID]; !ok {
+			b.SoundPlayers[guildID] = soundplayer.NewSoundPlayer(b.Joiner, guildID)
 		}
-		player := b.MusicPlayers[guildID]
+		player := b.SoundPlayers[guildID]
 
 		var voiceChannelID string
 		for _, vs := range vss {
@@ -176,15 +174,20 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 
 		// Start playing music
 		go func() {
+			playErrC := make(chan error, 1)
+			playErrC <- nil
 			for _, entry := range entries {
-				if _, err := b.Session.ChannelMessageSend(channelID, fmt.Sprintf(":musical_note: Now Playing :musical_note:\n%s", entry.URL)); err != nil {
-					fmt.Fprintln(os.Stderr, err)
-					break
-				}
+				mp := musicplayer.NewMusicPlayer(player, entry.URL)
 
-				if err := player.Play(context.Background(), voiceChannelID, entry.URL); err != nil {
+				var errC chan error
+				go func() {
+					time.Sleep(30) // Wait for converting the current music.
+					errC <- mp.Download(ctx)
+				}()
+
+				// Wait end of the previous music.
+				if err := <-playErrC; err != nil { // If fail to play the previous music, print and continue.
 					fmt.Fprintln(os.Stderr, err)
-					// Continue to play.
 				}
 
 				hasUser, err := b.hasUserExceptForMe(guildID, voiceChannelID)
@@ -195,6 +198,15 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 				if !hasUser {
 					break
 				}
+
+				if _, err := b.Session.ChannelMessageSend(channelID, fmt.Sprintf(":musical_note: Now Playing :musical_note:\n%s", entry.URL)); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					break
+				}
+
+				go func() {
+					playErrC <- mp.Play(ctx, voiceChannelID)
+				}()
 			}
 
 			// TODO: Leave from the voice channel.
