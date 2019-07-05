@@ -1,6 +1,7 @@
 package musicplayer
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -8,35 +9,36 @@ import (
 	"sync"
 
 	"github.com/acomagu/musicbot/soundplayer"
-	"github.com/djherbis/buffer"
-	"github.com/djherbis/nio"
 	"github.com/jonas747/dca"
 )
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
 
 type MusicPlayer struct {
 	sp       *soundplayer.SoundPlayer
 	url      string
-	w        *nio.PipeWriter
-	r        io.Reader
+	buf      *bytes.Buffer
 	download sync.Once
 }
 
 func NewMusicPlayer(sp *soundplayer.SoundPlayer, url string) *MusicPlayer {
-	r, w := nio.Pipe(buffer.New(15 * 1024 * 1024)) // 15MB
 	return &MusicPlayer{
 		sp:  sp,
 		url: url,
-		w:   w,
-		r:   r,
+		buf: bufPool.Get().(*bytes.Buffer),
 	}
 }
 
 func (mp *MusicPlayer) Download(ctx context.Context) error {
 	var er error
 	mp.download.Do(func() {
-		cmd := exec.CommandContext(ctx, "youtube-dl", "--no-playlist", "--max-filesize=15M", "-f", "bestaudio[asr<=50000][abr<=200]/bestaudio/worst[asr>=40000][abr>=120]/worst[abr>=90]/best", "-o", "-", mp.url)
+		cmd := exec.CommandContext(ctx, "youtube-dl", "--no-playlist", "-f", "bestaudio[asr<=50000][abr<=200]/bestaudio/worst[asr>=40000][abr>=120]/worst[abr>=90]/best", "-o", "-", mp.url)
 
-		cmd.Stdout = mp.w
+		cmd.Stdout = mp.buf
 		cmd.Stderr = os.Stderr
 
 		if err := cmd.Start(); err != nil {
@@ -44,30 +46,31 @@ func (mp *MusicPlayer) Download(ctx context.Context) error {
 		}
 
 		er = cmd.Wait()
-		mp.w.CloseWithError(io.EOF)
 	})
 
 	return er
 }
 
+// Don't run concurrently with Download().
 func (mp *MusicPlayer) Play(ctx context.Context, channelID string) error {
 	if err := mp.Download(ctx); err != nil { // Ensure
 		return err
 	}
 
-	frames, err := loadSound(mp.r)
+	frames, err := loadSound(mp.buf)
 	if err != nil {
 		return err
 	}
 
+	mp.buf.Reset()
+	bufPool.Put(mp.buf)
+
 	// No concurrent for low performance env.
-	frameC := make(chan []byte)
-	go func() {
-		for _, frame := range frames {
-			frameC <- frame
-		}
-		close(frameC)
-	}()
+	frameC := make(chan []byte, len(frames))
+	for _, frame := range frames {
+		frameC <- frame
+	}
+	close(frameC)
 
 	if err := mp.sp.PlaySound(ctx, channelID, frameC); err != nil {
 		return err
