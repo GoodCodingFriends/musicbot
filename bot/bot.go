@@ -177,7 +177,12 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 			playErrC := make(chan error, 1)
 			playErrC <- nil
 			for _, entry := range entries {
-				mp := musicplayer.NewMusicPlayer(player, entry.URL)
+				url := entry.URL
+				if !strings.HasPrefix(url, "http") {
+					url = fmt.Sprint("http://%s", url)
+				}
+
+				mp := musicplayer.NewMusicPlayer(player, url)
 
 				var errC chan error
 				go func() {
@@ -199,7 +204,7 @@ func (b *Bot) OnMessageCreate(e *MessageCreateEvent) error {
 					break
 				}
 
-				if _, err := b.Session.ChannelMessageSend(channelID, fmt.Sprintf(":musical_note: Now Playing :musical_note:\n%s", entry.URL)); err != nil {
+				if _, err := b.Session.ChannelMessageSend(channelID, fmt.Sprintf(":musical_note: Now Playing :musical_note:\n%s", url)); err != nil {
 					fmt.Fprintln(os.Stderr, err)
 					break
 				}
